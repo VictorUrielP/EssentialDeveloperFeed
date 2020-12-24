@@ -78,12 +78,12 @@ class RemoteFeedLoaderTest: XCTestCase {
         let (sut, client) = makeSUT()
         let item1 = makeItem(id: UUID(),
                              imageURL: URL(string: "https://www.a-url.com")!)
-
+        
         let item2 = makeItem(id: UUID(),
                              description: "a description",
                              location: "a location",
                              imageURL: URL(string: "https://www.another-url.com")!)
-
+        
         let items = [item1.model, item2.model]
         
         expect(sut, toCompleteWithResult: .success(items), when: {
@@ -144,13 +144,27 @@ class RemoteFeedLoaderTest: XCTestCase {
         return try! JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
     }
     
-    private func expect(_ sut: RemoteFeedLoader, toCompleteWithResult result: RemoteFeedLoader.Result, when action: () -> Void, file: StaticString = #filePath, line: UInt = #line) {
-        var capturedResults = [RemoteFeedLoader.Result]()
-        sut.load { capturedResults.append($0) }
+    private func expect(_ sut: RemoteFeedLoader, toCompleteWithResult expectedResult: RemoteFeedLoader.Result, when action: () -> Void, file: StaticString = #filePath, line: UInt = #line) {
+        let exp = expectation(description: "Wait for load completion")
+        
+        sut.load { receivedResult in
+            switch(receivedResult, expectedResult) {
+            case let (.success(receivedResult), .success(expectedResult)):
+                XCTAssertEqual(receivedResult, expectedResult, file: file, line: line)
+            
+            case let (.failure(receivedError), .failure(expectedError)):
+                XCTAssertEqual(receivedError, expectedError, file: file, line: line)
+                
+            default:
+                XCTFail("Expected result \(expectedResult) got \(receivedResult) instead", file: file, line: line)
+            }
+            
+            exp.fulfill()
+        }
         
         action()
         
-        XCTAssertEqual(capturedResults, [result], file: file, line: line)
+        wait(for: [exp], timeout: 1.0)
     }
     
     private class HTTPClientSpy: HTTPClient {
